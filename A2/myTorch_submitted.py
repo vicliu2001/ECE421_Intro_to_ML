@@ -1,9 +1,7 @@
-# NOTE: this file contains code rewritten by copilot
-
-
 import numpy as np
 import random
 import collections
+from numpy.random.mtrand import f
 import util
 
 # YOU ARE NOT ALLOWED TO USE sklearn or Pytorch in this assignment
@@ -53,38 +51,28 @@ class Optimizer:
             self.optimize = self.adam
 
     def sgd(self, gradient):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
+        # update rule: w_t+1 = w_t - lr * gradient
         return -self.lr * gradient
-        
-        "*** YOUR CODE ENDS HERE ***"
 
     def heavyball_momentum(self, gradient):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
+        # adds heavyball momentum to sgd
         update = -self.lr * gradient + self.gama * self.v
-        self.v = update
+        self.v = update # update the momentum
         return update
-        "*** YOUR CODE ENDS HERE ***"
 
     def nestrov_momentum(self, gradient):
         return self.heavyball_momentum(gradient)
 
     def adam(self, gradient):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        self.m = self.beta_m * self.m + (1 - self.beta_m) * gradient
-        self.v = self.beta_v * self.v + (1 - self.beta_v) * gradient ** 2
-        m_hat = self.m / (1 - self.beta_m ** self.t)
-        v_hat = self.v / (1 - self.beta_v ** self.t)
-        self.t += 1
-        update = -self.lr * m_hat / (np.sqrt(v_hat) + self.epsilon)
-        
+        # following the handout fomulas
+        self.m = (1 - self.beta_m) * gradient + self.beta_m * self.m
+        self.v = (1 - self.beta_v) * np.square(gradient) + self.beta_v * self.v
+        m_hat_t_1 = self.m / (1 - pow(self.beta_m, self.t))
+        v_hat_t_1 = self.v / (1 - pow(self.beta_v, self.t))
+        self.t = self.t + 1
+        update = -self.lr * m_hat_t_1 / (np.sqrt(v_hat_t_1) + self.epsilon)
         return update
-        "*** YOUR CODE ENDS HERE ***"
+        
 
 
 class MultiClassLogisticRegression:
@@ -139,38 +127,22 @@ class MultiClassLogisticRegression:
                 self.cross_entropy(self.y_one_hot_encoded, self.predict_with_X_aug_(X))
             )
 
+            # sample a batch of data, X_batch and y_batch, with batch_size number of datapoint uniformly at random
+            random_index = np.random.choice(X.shape[0], batch_size)
+            X_batch = X[random_index]
+            y_batch = self.y_one_hot_encoded[random_index]
 
-
-
-            "*** YOUR CODE STARTS HERE ***"
-            # TODO: sample a batch of data, X_batch and y_batch, with batch_size number of datapoint uniformly at random
-            # Hint: you can use np.random.choice to sample the indices of the data points.
-            # pass
-            indices = np.random.choice(X.shape[0], batch_size)
-            X_batch = X[indices]
-            y_batch = self.y_one_hot_encoded[indices]
-
-            # TODO: find the gradient that should be inputed the optimization function.
-            # NOTE: for nestrov_momentum, the gradient is derived at a point different from self.weights
-            # See the assignments handout or the lecture note for more information.
-            # pass
+            # find the gradient that should be inputed the optimization function.
             gradient = self.compute_grad(X_batch, y_batch, self.weights)
 
+            update = opt.optimize(gradient) # update vector by using the optimizatio method
+            self.weights += update # update self.weights
 
-            # TODO: find the update vector by using the optimization method and update self.weights, accordingly.
-            # pass
-            update = opt.optimize(gradient)
-            self.weights += update
-
-            # TODO: stopping criterion. check if norm infinity of the update vector is smaller than self.thres.
+            # stopping criterion. check if norm infinity of the update vector is smaller than self.thres.
             # if so, break the while loop.
-            # pass
             if np.linalg.norm(update, np.inf) < self.thres:
-                break
-            
+              break
 
-
-            "*** YOUR CODE ENDS HERE ***"
             if i % 1000 == 0 and verbose:
                 print(
                     " Training Accuray at {} iterations is {}".format(
@@ -181,96 +153,79 @@ class MultiClassLogisticRegression:
         return self
 
     def add_bias(self, X):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
+        # inserts a column of 1's to the leftmost column of X
         return np.hstack((np.ones((X.shape[0], 1)), X))
-    
-        "*** YOUR CODE ENDS HERE ***"
 
     def unique_classes_(self, y):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
+        # return a list of unique elements in y
         return np.unique(y)
-        "*** YOUR CODE ENDS HERE ***"
 
     def class_labels_(self, classes):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return {c: i for i, c in enumerate(classes)}
-        "*** YOUR CODE ENDS HERE ***"
+        # create a dictionary where each class is mapped to a unique integer label
+        class_labels_dict = {} # initialize an empty dictionary
+        num = 0 
+        for each_class in classes:
+          class_labels_dict[each_class] = num # set the value of this class element to a unique number
+          num += 1 # increment the number by 1 for the next class
+        return class_labels_dict
 
     def one_hot(self, y):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        y_one_hot_encoded = np.zeros((len(y), len(self.classes)))
+        y_one_hot = np.zeros((len(y), len(self.class_labels))) # initialize matrix to 0
         for i, label in enumerate(y):
-            y_one_hot_encoded[i][self.class_labels[label]] = 1
-        return y_one_hot_encoded
-        "*** YOUR CODE ENDS HERE ***"
+          class_index = self.class_labels[label] # get class index for the label
+          y_one_hot[i][class_index] = 1
+        return y_one_hot
 
     def softmax(self, z):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return np.exp(z) / np.sum(np.exp(z), axis=1).reshape(-1, 1)
-        "*** YOUR CODE ENDS HERE ***"
+        # ref: https://en.wikipedia.org/wiki/Softmax_function
+        z_exp = np.exp(z)
+        sum_z_exp = np.sum(z_exp, axis=1) # compute the sum of exp along each row
+        return z_exp / sum_z_exp.reshape(-1, 1)
 
     def predict_with_X_aug_(self, X_aug):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
         return self.softmax(np.dot(X_aug, self.weights.T))
-        "*** YOUR CODE ENDS HERE ***"
 
     def predict(self, X):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-
+        # using the implemented methods add_bias() and predict_with_X_aug()
         X_aug = self.add_bias(X)
         return self.predict_with_X_aug_(X_aug)
-    
-        "*** YOUR CODE ENDS HERE ***"
 
     def predict_classes(self, X):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        # return np.argmax(self.predict(X), axis=1)
-        return self.classes[np.argmax(self.predict(X), axis=1)]
-        "*** YOUR CODE ENDS HERE ***"
+        # ref: https://numpy.org/doc/2.0/reference/generated/numpy.argmax.html
+        # argmax returns the indices of the maximum values along an axis.
+        predicted_prob = self.predict(X) # get predicted probabilities for each class
+        predicted_classes_indices = np.argmax(predicted_prob, axis=1)
+        return self.classes[predicted_classes_indices]
 
     def score(self, X, y):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return np.mean(self.predict_classes(X) == y)
-        "*** YOUR CODE ENDS HERE ***"
+        correct = 0 # track the number of correctly classified classes
+        predicted_classes = self.predict_classes(X)
+        for i in range(len(y)): # loop through predictions and true labels
+          if predicted_classes[i] == y[i]:
+            correct += 1
+        return correct / len(y) # ratio of correct predictions
 
     def evaluate_(self, X_aug, y_one_hot_encoded):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return np.mean(np.argmax(self.predict_with_X_aug_(X_aug), axis=1) == np.argmax(y_one_hot_encoded, axis=1))
-        "*** YOUR CODE ENDS HERE ***"
+        predicted_prob = self.predict_with_X_aug_(X_aug)
+        predicted_classes = np.argmax(predicted_prob, axis=1)
+        true_classes = np.argmax(y_one_hot_encoded, axis=1)
 
+        correct = 0 # track the number of correct classifications
+        for i in range(len(true_classes)):
+          if predicted_classes[i] == true_classes[i]:
+            correct += 1
+        return correct / len(true_classes) # return the accuracy
+          
     def cross_entropy(self, y_one_hot_encoded, probs):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return -np.mean(np.sum(y_one_hot_encoded * np.log(probs), axis=1))
-        "*** YOUR CODE ENDS HERE ***"
+        # CE(P,Q) = - sum(P(k) * log(Q(k))), where k is over all classes
+        # compute the cross entropy error between one-hot encoded true labels and the predicted probabilities
+        return -np.sum(y_one_hot_encoded * np.log(probs)) / y_one_hot_encoded.shape[0]
 
     def compute_grad(self, X_aug, y_one_hot_encoded, w):
-        # TODO: add your implementation here
-        "*** YOUR CODE STARTS HERE ***"
-        # pass
-        return -np.dot((y_one_hot_encoded - self.predict_with_X_aug_(X_aug)).T, X_aug) / X_aug.shape[0]
-        "*** YOUR CODE ENDS HERE ***"
+        prob = self.predict_with_X_aug_(X_aug) # get the predicted probabilities
+        err = prob - y_one_hot_encoded # get the difference between prediction and true labels
+        gradient = np.dot(X_aug.T, err) / X_aug.shape[0] # compute the gradient of the loss function
+        return gradient.T
 
 
 def kmeans(examples, K, maxIters):
@@ -284,11 +239,7 @@ def kmeans(examples, K, maxIters):
             list of assignments (i.e. if examples[i] belongs to centers[j], then assignments[i] = j),
             final reconstruction loss)
     """
-    # NOTE: use helper functions defined in util.py as needed, such as dotProduct and increment.
-    # NOTE: the input examples is a list of examples, each example is a string-to-float dict representing a sparse vector.
-    # NOTE: the distance metric should be cosine similarity for this implementation.
-    "*** YOUR CODE STARTS HERE ***"
-    # pass
+
     centers = random.sample(examples, K)
     # centers = [c.copy() for c in centers]
     assignments = [-1] * len(examples)
@@ -297,9 +248,9 @@ def kmeans(examples, K, maxIters):
     for _ in range(maxIters):
         new_assignments = [-1] * len(examples)
         new_centers = [collections.Counter() for _ in range(K)]
-        totalCost = 0  # Reset totalCost for each iteration
+        totalCost = 0  # reset totalCost for each iteration
 
-        # Precompute norms for centers to avoid redundant calculations
+        # precompute norms for centers to avoid redundant calculations
         center_norms = [np.linalg.norm(list(center.values())) for center in centers]
 
         for i, example in enumerate(examples):
@@ -325,12 +276,5 @@ def kmeans(examples, K, maxIters):
 
     return centers, assignments, totalCost
 
+
     
-if __name__ == "__main__":
-    K = 6
-    examples = util.generateClusteringExamples(numExamples=100, numWordsPerTopic=3, numFillerWords=100)
-    
-    centers, assignments, totalCost = kmeans(examples, K, maxIters=100)
-    #print(centers)
-    # print(assignments)
-    #print(totalCost)
